@@ -1,7 +1,9 @@
 from typing import Optional, List, Tuple, Callable, Generator
+from numbers import Real
 
 Coordinate = Tuple[int, int]
 Move = Tuple[int, int]
+NumberFunc = Callable[[int, int], Real]
 
 def coord_to_number_full(x: int, y: int) -> int:
 	"""
@@ -67,10 +69,37 @@ def coord_to_number_quadrant_diagonal(x: int, y: int) -> int:
 	else:
 		return Tr(x+y+1)-x
 
-def knight_path(startx: int = 0, starty: int = 0,
+def coord_to_number_quadrant_square(x: int, y: int) -> Real:
+	"""
+	 1- 2  5  10
+	    |  |  |
+	 4- 3  6  11
+	       |  |
+	 9- 8- 7- 12
+	          |
+	16-15-14-13
+	"""
+	x, y = abs(x), abs(y)
+	if not x: # full square
+		# full square: (y+1)**2
+		y += 1
+		return y*y
+	elif x >= y: # left side (incl bottom corner)
+		# inner square: x*x
+		# left side: y+1
+		# total: x*x + y+1
+		return x*x + y + 1
+	else: #if x < y: # bottom side (excl corners)
+		# inner square: y*y
+		# full left side: y+1
+		# bottom side: y-x
+		return y*(y+2) + 1 - x
+
+def knight_path(stats: Optional[List] = None,
+                   startx: int = 0, starty: int = 0,
                    xmin: Optional[int] = None, ymin: Optional[int] = None,
                    xmax: Optional[int] = None, ymax: Optional[int] = None,
-                   number_func: Callable[[int, int], int] = None,
+                   number_func: Callable[[int, int], Real] = None,
                    moves: List[Move] = [(1,2),(2,1),(-1,2),(-2,1),(1,-2),(2,-1),(-1,-2),(-2,-1)]
 ) -> Generator[Tuple[int, Coordinate, int], None, Tuple[List[Coordinate]]]:
 	if xmin is None:
@@ -108,7 +137,11 @@ def knight_path(startx: int = 0, starty: int = 0,
 	x, y = startx, starty
 	used: List[Coordinate] = [(x, y)]
 	usednumbers: List[int] = [number_func(x, y)]
-	yield (len(used), (x, y), number_func(x, y))
+	if stats is not None:
+		stats.append((used, (startx, starty), (x, y)))
+	arg = yield (len(used), (x, y), number_func(x, y))
+	if arg and stats is not None:
+		stats.append((used, (startx, starty), (x, y)))
 	while True:
 		bestmove = -1
 		bestnumber = float('inf')
@@ -120,19 +153,19 @@ def knight_path(startx: int = 0, starty: int = 0,
 					bestmove = move
 					bestnumber = number
 		if bestmove < 0:
+			stats.append((used, (startx, starty), (x, y)))
 			return (used, (startx, starty), (x, y))
 		x += moves[bestmove][0]
 		y += moves[bestmove][1]
 		used.append((x, y))
 		usednumbers.append(bestnumber)
-		yield (len(used), (x, y), bestnumber)
+		arg = yield (len(used), (x, y), bestnumber)
+		if arg and stats is not None:
+			stats.append((used, (startx, starty), (x, y)))
 
-def knight_path_stats(stats: List, *args, **kwargs):
-	_stats = yield from knight_path(*args, **kwargs)
-	stats.append(_stats)
 
 if __name__ == "__main__":
 	stats = []
-	for i, (nx, ny), num in knight_path_stats(stats, xmin=0, ymin=0):
+	for i, (nx, ny), num in knight_path(stats, xmin=0, ymin=0, number_func=coord_to_number_quadrant_square):
 		print(i, (nx, ny), num)
 	print(stats)
